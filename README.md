@@ -1,136 +1,66 @@
-Configuration:
-pigz v 2.4
-gzip v 1.9
-javac 1.8.0_312
-GraalVM v 22.3.1
+# Java-Pigz - Multithreaded Gzip Compression in Java
 
-To build both versions:
-jar xf hw3.jar
-javac Pigzj.java
+**Language**: Java <br/>
+**Date**: Feb 2023 <br/>
+**Repository**: [github.com/awest25/Java-Pigz](https://github.com/awest25/Java-Pigz)
+
+## Overview
+
+Pigzj is a Java program inspired by the C `pigz` implementation. It performs multithreaded compression, aiming to improve wall-clock performance. By breaking the input into fixed-size blocks and using multiple threads for compression, Pigzj ensures that compressed output blocks are generated in the order of their uncompressed input. This project provides a stripped-down version that focuses solely on `pigz`-style multithreaded compression.
+
+## Key Features
+
+- **Multithreaded Compression**: Uses multiple threads for compressing input data blocks, each of size 128 KiB.
+- **Priming Compression Dictionary**: Utilizes the last 32 KiB of the previous block to prime the compression dictionary, resulting in enhanced compression for subsequent blocks.
+- **GZIP Standard Compliance**: Ensures that the output strictly follows the GZIP file format standard as per Internet RFC 1952.
+- **Performance Comparison**: Built to compare performance between native Java and GraalVM's `native-image`.
+
+## Simplifications from `pigz`
+
+- Compression-only: Pigzj solely focuses on compression, omitting decompression.
+- Limited option support: Supports only the `-p processes` option from `pigz`.
+- Streamlined I/O: Always reads from standard input and writes to standard output. No filename arguments are allowed.
+- Error Handling: Custom error messages and handling, without strictly mimicking `pigz`.
+
+## Technical Stack
+
+- **Environment**: Recommended development and testing on Seasnet Linux server.
+- **Java Version**: Runs under GraalVM 22.3.1 with OpenJDK 17.0.6.
+- **GZIP Compliance**: Adheres to the GZIP file format standard (RFC 1952).
+
+## Getting Started
+
+1. Clone the repo: `git clone https://github.com/awest25/Pigzj.git`
+2. Compile the program.
+3. Run Pigzj, redirecting input and output appropriately.
+4. For performance comparisons, also build using GraalVM's `native-image` and compare timings.
+
+## Building
+
+```bash
+# Compiling the standard program.
+jar xf hw3.jar <br/>
+javac Pigzj.java <br/>
+
+# The following will generate an optimized version.
 native-image -o pigzj Pigzj
+```
 
-Analysis
-In order to evaluate the performance of gzip, pigz, OpenJDK Pigzj, and GraalVM
- pigzj, several tests were run. In the first test I executed each method 
- without specifying the -p flag. The results showed that gzip was the slowest,
-  taking over 10 seconds, while pigz performed the best, taking only about 
-  3.6 seconds. Subsequent tests were conducted on pigz, Pigzj, and pigzj using
-   a range of processor counts. Pigz peaked around 1 second at 4 processors, 
-   Pigzj peaked around 1 second at 4 processors, and pigzj peaked around 1.4 
-   seconds at 4 processors. Thus, Pigzj emerged as the clear winner in terms 
-   of increased processor count.
+## Sample Usage
 
-Strace: The system call traces generated using strace were used to compare 
-and contrast the four programs. The majority syscall used by each program 
-revealed that gzip mainly uses write, pigz mainly uses read, and both Pigzj 
-and pigzj mainly use futex. Futex is a syscall that is often used for blocking
- in multi-threaded applications. In my implementation, an ExecutorService 
- object was used to read a bounded block of input and send that block for 
- asynchronous execution. After all input was processed, the result of each 
- thread was output by accessing the associated Future object. Since the main
-  thread may wait for the first block of data to compress, the program mainly
-   uses futex. Despite this, it is much more efficient than singly-threaded 
-   programs like gzip.
+```bash
+input=/usr/local/cs/graalvm-ce-java17-22.3.1/lib/modules
+time gzip <$input >gzip.gz
+time pigz <$input >pigz.gz
+time java Pigzj <$input >Pigzj.gz
+time ./pigzj <$input >pigzj.gz
+ls -l gzip.gz pigz.gz Pigzj.gz pigzj.gz
 
-As the file size increases, the multi-threaded programs are expected to be 
-more efficient compared to sequential programs. This was observed in the 
-trials, where gzip performed worse than all other implementations. A 
-limitation is that there may be a few bottlenecks such as reading from 
-input and creating the trialer with the giant file in memory. This could
- be addressed with changes to the implimentation.
+# Checking Pigzj's and pigzj's output.
+gzip -d <Pigzj.gz | cmp - $input
+gzip -d <pigzj.gz | cmp - $input
+```
 
-Increasing the number of processors could potentially be counterproductive.
- Increasing the number of threads used may have overhead greater than the 
- amount of work done in each thread. Since blocking threads is already the 
- main syscall used in Pigzj and pigzj, more threads would mean more blocking,
-  which may hurt performance if increased past the "sweet-spot". But in 
-  general, performance with increased threads scales well.
+## Further Notes
 
-
-
-Some outputs of the timing script:
-
-Processors = 1 (Default)
-gzip:
-real    0m11.787s   0m11.482s   0m11.644s
-user    0m10.081s   0m10.307s   0m10.102s
-sys     0m0.117s    0m0.121s    0m0.114s
-
-pigz:
-real    0m3.663s    0m3.793s    0m3.858s
-user    0m10.458s   0m10.404s   0m10.531s
-sys     0m0.098s    0m0.081s    0m0.072s
-
-OpenJDK Pigzj:
-real    0m3.826s    0m3.739s    0m3.878s
-user    0m10.715s   0m10.115s   0m10.329s
-sys     0m0.500s    0m0.514s    0m0.488s
-
-GraalVM pigzj:
-real    0m4.014s    0m4.052s    0m4.122s
-user    0m10.807s   0m10.846s   0m10.887s
-sys     0m0.734s    0m0.736s    0m0.691s
-
-
-Processors = 2
-gzip:
-real    0m5.894s    0m6.033s    0m6.157s
-user    0m10.535s   0m10.562s   0m10.593s
-sys     0m0.130s    0m0.140s    0m0.129s
-
-pigz:
-real    0m1.831s    0m1.876s    0m1.929s
-user    0m10.874s   0m10.917s   0m10.996s
-sys     0m0.193s    0m0.186s    0m0.162s
-
-OpenJDK Pigzj:
-real    0m1.852s    0m1.795s    0m1.844s
-user    0m10.468s   0m10.461s   0m10.473s
-sys     0m0.998s    0m0.970s    0m0.918s
-
-GraalVM pigzj:
-real    0m1.912s    0m1.981s    0m1.935s
-user    0m10.984s   0m11.024s   0m11.078s
-sys     0m0.888s    0m0.904s    0m0.865s
-
-Processors = 4
-gzip:
-real    0m3.579s    0m4.857s    0m3.743s
-user    0m10.535s   0m10.562s   0m10.593s
-sys     0m0.130s    0m0.140s    0m0.129s
-
-pigz:
-real    0m0.915s    0m1.042s    0m1.041s
-user    0m10.874s   0m10.917s   0m10.996s
-sys     0m0.193s    0m0.186s    0m0.162s
-
-OpenJDK Pigzj:
-real    0m1.068s    0m1.025s    0m1.038s
-user    0m10.468s   0m10.461s   0m10.473s
-sys     0m0.998s    0m0.970s    0m0.918s
-
-GraalVM pigzj:
-real    0m1.496s    0m1.445s    0m1.470s
-user    0m10.984s   0m11.024s   0m11.078s
-sys     0m0.888s    0m0.904s    0m0.865s
-
-Processors = 8
-gzip:
-real    0m4.400s    0m5.986s    0m4.607s
-user    0m12.836s   0m12.863s   0m12.893s
-sys     0m0.156s    0m0.168s    0m0.154s
-
-pigz:
-real    0m1.117s    0m1.271s    0m1.271s
-user    0m13.320s   0m13.357s   0m13.434s
-sys     0m0.238s    0m0.232s    0m0.202s
-
-OpenJDK Pigzj:
-real    0m1.292s    0m1.237s    0m1.252s
-user    0m12.822s   0m12.815s   0m12.827s
-sys     0m1.197s    0m1.161s    0m1.098s
-
-GraalVM pigzj:
-real    0m1.872s    0m1.809s    0m1.838s
-user    0m13.672s   0m13.716s   0m13.770s
-sys     0m1.182s    0m1.261s    0m1.295s
+For a complete assessment, refer to the after-action report provided within the repository. This comprehensive report evaluates the performance, potential scalability issues, and general observations based on various trials.
